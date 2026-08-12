@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="BuildSystemProperties">
+    <option name="modules">
+      <map>
+        <entry key="djbuddy">
+          <value>
+            <ModuleState>
+              <option name="buildSystemId" value="LEININGEN" />
+              <option name="displayName" value="djbuddy:0.1.0-SNAPSHOT" />
+            </ModuleState>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>

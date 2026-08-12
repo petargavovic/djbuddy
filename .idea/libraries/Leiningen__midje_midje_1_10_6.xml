@@ -1,5 +1,5 @@
 <component name="libraryTable">
-  <library name="Leiningen: midje:1.10.6">
+  <library name="Leiningen: midje/midje:1.10.6">
     <CLASSES>
       <root url="jar://$MAVEN_REPOSITORY$/midje/midje/1.10.6/midje-1.10.6.jar!/" />
     </CLASSES>
