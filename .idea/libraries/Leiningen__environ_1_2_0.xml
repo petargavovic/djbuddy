@@ -1,5 +1,5 @@
 <component name="libraryTable">
-  <library name="Leiningen: environ/environ:1.2.0">
+  <library name="Leiningen: environ:1.2.0">
     <CLASSES>
       <root url="jar://$MAVEN_REPOSITORY$/environ/environ/1.2.0/environ-1.2.0.jar!/" />
     </CLASSES>

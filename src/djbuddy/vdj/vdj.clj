@@ -1,4 +1,4 @@
-(ns djbuddy.vdj
+(ns djbuddy.vdj.vdj
   (:require [clj-http.client :as http])
   (:require [clojure.java.io :as io]
             [clojure.string :as str])
@@ -89,6 +89,68 @@
   (case source
     :api  (current-track-from-api)
     :file (current-track)))
+
+(defn deck-track [deck]
+  (when (deck-audible? deck)
+    (let [artist (vdj-query (str "deck " deck " get_artist"))
+          title  (vdj-query (str "deck " deck " get_title"))]
+
+      (when (and (seq artist)
+                 (seq title))
+        {:artists [artist]
+         :track title
+         :deck deck
+         :played-at (java.time.Instant/now)
+         :source :vdj-live}))))
+
+(defn audible-tracks []
+  (keep deck-track [1 2]))
+
+(defn start-live-watch! [on-track]
+  (let [running?     (atom true)
+        last-by-deck (atom {})
+        track-order  (atom 0)]
+
+    (let [worker
+          (future
+            (while @running?
+
+              (doseq [track (audible-tracks)]
+                (let [deck (:deck track)
+                      key  [(:artists track)
+                            (:track track)]]
+
+                  (when (not= key
+                              (get @last-by-deck deck))
+
+                    (swap! last-by-deck assoc deck key)
+
+                    ;; array-map to arrange order of parameters
+                    (let [numbered-track
+                          (array-map
+                            :order   (swap! track-order inc)
+                            :artists (:artists track)
+                            :track   (:track track)
+                            :deck    (:deck track)
+                            :played-at (:played-at track)
+                            :source  (:source track))]
+
+                      (try
+                        (on-track numbered-track)
+
+                        (catch Exception e
+                          (println
+                            "Track processing failed:"
+                            (.getMessage e))))))))
+
+              (Thread/sleep 1000)))]
+
+      {:future worker
+
+       :stop!
+       (fn []
+         (reset! running? false)
+         (future-cancel worker))})))
 
 
 (defn watch-tracklist []

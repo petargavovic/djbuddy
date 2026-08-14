@@ -1,5 +1,5 @@
 <component name="libraryTable">
-  <library name="Leiningen: joda-time/joda-time:2.10">
+  <library name="Leiningen: joda-time:2.10">
     <CLASSES>
       <root url="jar://$MAVEN_REPOSITORY$/joda-time/joda-time/2.10/joda-time-2.10.jar!/" />
     </CLASSES>
