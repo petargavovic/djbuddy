@@ -51,6 +51,7 @@
     <orderEntry type="library" name="Leiningen: org.clojure/core.rrb-vector:0.0.14" level="project" />
     <orderEntry type="library" name="Leiningen: org.clojure/core.specs.alpha:0.2.62" level="project" />
     <orderEntry type="library" name="Leiningen: org.clojure/core.unify:0.5.7" level="project" />
+    <orderEntry type="library" name="Leiningen: org.clojure/data.xml:0.2.0-alpha9" level="project" />
     <orderEntry type="library" name="Leiningen: org.clojure/java.classpath:1.0.0" level="project" />
     <orderEntry type="library" name="Leiningen: org.clojure/math.combinatorics:0.1.6" level="project" />
     <orderEntry type="library" name="Leiningen: org.clojure/spec.alpha:0.3.218" level="project" />
