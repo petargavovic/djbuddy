@@ -1,5 +1,6 @@
 (ns djbuddy.analysis.report
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str])
+  (:import [java.time Duration Instant]))
 
 (defn average
   [values]
@@ -101,25 +102,53 @@
      (when (seq counts)
        (apply max-key val counts))}))
 
-(defn track-duration-seconds
-  [track]
-  (or (:duration-seconds track)
-      (:duration track)))
+(defn set-duration-seconds
+  [{:keys [source started-at ended-at]}]
+  (when started-at
+    (let [effective-end
+          (cond
+            ended-at
+            ended-at
 
-(defn duration-stats
-  [tracks]
-  (let [seconds (reduce +
-                        0
-                        (keep track-duration-seconds tracks))]
-    {:seconds seconds
-     :minutes (/ seconds 60.0)}))
+            ;; Live report is still running
+            (= source :vdj-live)
+            (Instant/now)
 
-(defn resolution-stats
-  [tracks]
-  (let [resolved   (count (filter :resolved? tracks))
-        unresolved (- (count tracks) resolved)]
-    {:resolved resolved
-     :unresolved unresolved}))
+            :else
+            nil)]
+
+      (when effective-end
+        (.getSeconds
+          (Duration/between
+            started-at
+            effective-end))))))
+
+(defn format-duration
+  [seconds]
+  (if (nil? seconds)
+    "Unknown"
+
+    (let [hours
+          (quot seconds 3600)
+          minutes
+          (quot (mod seconds 3600) 60)
+          seconds-left
+          (mod seconds 60)]
+
+      (cond
+        (pos? hours)
+        (format "%dh %02dmin"
+                hours
+                minutes)
+
+        (pos? minutes)
+        (format "%dmin %02ds"
+                minutes
+                seconds-left)
+
+        :else
+        (format "%ds"
+                seconds-left)))))
 
 (defn resolved-track?
   [track]
@@ -203,16 +232,24 @@
 
 
 (defn performance-report
-  [tracks]
-  (let [ordered  (vec (sort-by :order tracks))
-        duration (duration-stats ordered)]
-    {:track-count      (count ordered)
-     :duration-minutes (round-2 (:minutes duration))
-     :bpm              (bpm-stats ordered)
-     :genres           (genre-stats ordered)
-     :decades          (decade-stats ordered)
-     :artists          (artist-stats ordered)
-     :sections         (section-analysis ordered)}))
+  [set-data]
+  (let [tracks
+        (vec
+          (sort-by
+            :order
+            (:tracks set-data)))
+        duration-seconds
+        (set-duration-seconds set-data)]
+    {:track-count      (count tracks)
+     :duration-seconds duration-seconds
+     :duration-minutes (when duration-seconds
+                         (round-2
+                           (/ duration-seconds 60.0)))
+     :bpm              (bpm-stats tracks)
+     :genres           (genre-stats tracks)
+     :decades          (decade-stats tracks)
+     :artists          (artist-stats tracks)
+     :sections         (section-analysis tracks)}))
 
 (defn print-performance-report
   [report]
@@ -225,7 +262,8 @@
   (println "OVERVIEW")
   (println "----------------------------------------")
   (println "Tracks:    " (:track-count report))
-  (println "Duration:  " (:duration-minutes report) "min")
+  (println "Duration:  " (format-duration
+                           (:duration-seconds report)))
 
   (let [{:keys [min max avg start end]} (:bpm report)]
     (println)

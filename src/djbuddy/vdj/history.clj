@@ -4,7 +4,12 @@
   (:import [java.time Instant LocalTime]
            [java.time.format DateTimeFormatterBuilder]
            [java.time LocalDate LocalDateTime LocalTime]
-           [java.time.format DateTimeFormatterBuilder]))
+           [java.time.format DateTimeFormatterBuilder]
+           [java.time
+            LocalDate
+            LocalTime
+            LocalDateTime
+            ZoneId]))
 
 (def history-dir
   (io/file
@@ -148,6 +153,32 @@
          end)
       tracks)))
 
+(defn set-time-range
+  [date-str start-str end-str]
+  (let [date       (LocalDate/parse date-str)
+        start-time (LocalTime/parse start-str)
+        end-time   (LocalTime/parse end-str)
+
+        start-local
+        (LocalDateTime/of date start-time)
+
+        end-date
+        (if (.isBefore end-time start-time)
+          (.plusDays date 1)
+          date)
+
+        end-local
+        (LocalDateTime/of end-date end-time)
+
+        zone
+        (ZoneId/systemDefault)]
+
+    {:started-at
+     (.toInstant (.atZone start-local zone))
+
+     :ended-at
+     (.toInstant (.atZone end-local zone))}))
+
 (defn add-track-order [tracks]
   (mapv
     (fn [index track]
@@ -177,7 +208,63 @@
       :else
       nil)))
 
-(defn import-set [date start-time end-time]
+(defn track-instant
+  [track]
+  (or
+    (:played-at track)
+
+    (when-let [played-date-time
+               (:played-date-time track)]
+
+      (.toInstant
+        (.atZone
+          played-date-time
+          (ZoneId/systemDefault))))))
+
+(defn estimated-track-end
+  [track]
+  (let [started-at
+        (track-instant track)
+
+        duration
+        (:duration-seconds track)]
+
+    (when (and started-at duration)
+      (.plusMillis
+        started-at
+        (long
+          (Math/round
+            (* (double duration)
+               1000.0)))))))
+
+(defn track-start
+  [track]
+  (:played-at track))
+
+(defn track-end-from-duration
+  [track]
+  (when (and (:played-at track)
+             (:duration-seconds track))
+    (.plusMillis
+      ^Instant (:played-at track)
+      (long
+        (* 1000
+           (:duration-seconds track))))))
+
+(defn next-track-after
+  [all-tracks last-selected-track]
+  (let [last-start (:played-at last-selected-track)]
+    (first
+      (filter
+        #(and (:played-at %)
+              last-start
+              (.isAfter
+                ^Instant (:played-at %)
+                ^Instant last-start))
+        all-tracks))))
+
+(defn import-set
+  [date start-time end-time]
   (let [{:keys [start end end-date]}
         (set-range date start-time end-time)
 
@@ -189,30 +276,105 @@
           [start-date]
           [start-date end-date])
 
-        tracks
-        (mapcat
-          (fn [current-date]
-            (let [date-string (str current-date)]
+        ;; Read all tracks from all relevant history files.
+        all-tracks
+        (->> dates
+             (mapcat
+               (fn [current-date]
+                 (let [date-string
+                       (str current-date)]
 
-              (if-let [file
-                       (history-file-for-date
-                         date-string)]
+                   (if-let [file
+                            (history-file-for-date
+                              date-string)]
 
-                (read-history
-                  file
-                  date-string)
+                     (read-history
+                       file
+                       date-string)
 
-                (do
-                  (println
-                    "VirtualDJ history file not found for:"
-                    date-string)
-                  []))))
+                     (do
+                       (println
+                         "VirtualDJ history file not found for:"
+                         date-string)
+                       [])))))
+             (sort-by :played-at)
+             vec)
 
-          dates)]
+        filtered-tracks
+        (-> all-tracks
+            (tracks-between-datetimes start end)
+            add-track-order)
 
-    (-> tracks
-        (tracks-between-datetimes start end)
-        add-track-order)))
+        first-track
+        (first filtered-tracks)
+
+        last-track
+        (last filtered-tracks)
+
+        next-track
+        (when last-track
+          (next-track-after
+            all-tracks
+            last-track))
+
+        started-at
+        (when first-track
+          (track-start first-track))
+
+        last-track-natural-end
+        (when last-track
+          (track-end-from-duration last-track))
+
+        next-track-start
+        (when next-track
+          (track-start next-track))
+
+        ended-at
+        (cond
+          (and next-track-start
+               last-track-natural-end)
+          (if (.isBefore
+                ^Instant next-track-start
+                ^Instant last-track-natural-end)
+
+            next-track-start
+            last-track-natural-end)
+
+          ;; Only the next track is known
+          next-track-start
+          next-track-start
+
+          ;; Only track duration is known
+          last-track-natural-end
+          last-track-natural-end
+
+          :else
+          nil)]
+
+    {:source :vdj-history
+
+     :started-at started-at
+     :ended-at ended-at
+
+     :end-time-source
+     (cond
+       (and next-track-start
+            last-track-natural-end
+            (.isBefore
+              ^Instant next-track-start
+              ^Instant last-track-natural-end))
+       :next-track
+
+       last-track-natural-end
+       :last-track-duration
+
+       next-track-start
+       :next-track
+
+       :else
+       nil)
+
+     :tracks filtered-tracks}))
 
 
 (defn track-by-order [tracks order]

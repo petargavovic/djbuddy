@@ -290,11 +290,17 @@
 
     (enrich-lastfm resolved)))
 
-(defn resolve-history-set [tracks]
-  (let [library-tracks (library/load-library)]
-    (mapv
-      #(resolve-history-track % library-tracks {})
-      tracks)))
+(defn resolve-history-set
+  [set-data]
+  (let [library (library/load-library)
+
+        resolved-tracks
+        (mapv
+          #(resolve-history-track % library {})
+          (:tracks set-data))]
+
+    (assoc set-data
+      :tracks resolved-tracks)))
 
 ;; --------------------------------------------------
 ;; LIVE MODE
