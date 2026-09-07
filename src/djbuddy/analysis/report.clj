@@ -230,6 +230,22 @@
         section-names
         (split-into-fourths tracks)))
 
+(defn data-quality-stats
+  [tracks]
+  {:bpm-known
+   (count (keep :bpm tracks))
+
+   :genre-known
+   (count (keep :genre tracks))
+
+   :year-known
+   (count
+     (keep #(when (parse-year (:year %))
+              true)
+           tracks))
+
+   :key-known
+   (count (keep :key tracks))})
 
 (defn performance-report
   [set-data]
@@ -249,7 +265,8 @@
      :genres           (genre-stats tracks)
      :decades          (decade-stats tracks)
      :artists          (artist-stats tracks)
-     :sections         (section-analysis tracks)}))
+     :sections         (section-analysis tracks)
+     :data-quality     (data-quality-stats tracks)}))
 
 (defn print-performance-report
   [report]
