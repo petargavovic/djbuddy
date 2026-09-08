@@ -1,6 +1,5 @@
 (ns djbuddy.vdj.history
-  (:require [clojure.java.io :as io]
-            [clojure.string :as str])
+  (:require [clojure.java.io :as io])
   (:import [java.time Instant LocalTime]
            [java.time.format DateTimeFormatterBuilder]
            [java.time LocalDate LocalDateTime LocalTime]
@@ -8,8 +7,7 @@
            [java.time
             LocalDate
             LocalTime
-            LocalDateTime
-            ZoneId]))
+            LocalDateTime]))
 
 (def history-dir
   (io/file
@@ -130,55 +128,6 @@
             end))
        vec))
 
-(defn time-between? [time start end]
-  (if (<= (compare start end) 0)
-
-    ;; Normal:
-    ;; 20:00 -> 23:00
-    (and (>= (compare time start) 0)
-         (<= (compare time end) 0))
-
-    ;; Crosses midnight:
-    ;; 23:00 -> 03:00
-    (or (>= (compare time start) 0)
-        (<= (compare time end) 0))))
-
-(defn tracks-between [tracks start-time end-time]
-  (let [start (parse-time start-time)
-        end   (parse-time end-time)]
-    (filterv
-      #(time-between?
-         (:played-time %)
-         start
-         end)
-      tracks)))
-
-(defn set-time-range
-  [date-str start-str end-str]
-  (let [date       (LocalDate/parse date-str)
-        start-time (LocalTime/parse start-str)
-        end-time   (LocalTime/parse end-str)
-
-        start-local
-        (LocalDateTime/of date start-time)
-
-        end-date
-        (if (.isBefore end-time start-time)
-          (.plusDays date 1)
-          date)
-
-        end-local
-        (LocalDateTime/of end-date end-time)
-
-        zone
-        (ZoneId/systemDefault)]
-
-    {:started-at
-     (.toInstant (.atZone start-local zone))
-
-     :ended-at
-     (.toInstant (.atZone end-local zone))}))
-
 (defn add-track-order [tracks]
   (mapv
     (fn [index track]
@@ -207,35 +156,6 @@
 
       :else
       nil)))
-
-(defn track-instant
-  [track]
-  (or
-    (:played-at track)
-
-    (when-let [played-date-time
-               (:played-date-time track)]
-
-      (.toInstant
-        (.atZone
-          played-date-time
-          (ZoneId/systemDefault))))))
-
-(defn estimated-track-end
-  [track]
-  (let [started-at
-        (track-instant track)
-
-        duration
-        (:duration-seconds track)]
-
-    (when (and started-at duration)
-      (.plusMillis
-        started-at
-        (long
-          (Math/round
-            (* (double duration)
-               1000.0)))))))
 
 (defn track-start
   [track]
@@ -375,8 +295,3 @@
        nil)
 
      :tracks filtered-tracks}))
-
-
-(defn track-by-order [tracks order]
-  (first
-    (filter #(= order (:order %)) tracks)))

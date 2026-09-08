@@ -1,11 +1,9 @@
 (ns djbuddy.vdj.vdj
   (:require [clj-http.client :as http])
   (:require [clojure.java.io :as io]
-            [clojure.string :as str])
+            [clojure.string :as str]))
 
-  (:import [java.nio.file Paths Path StandardWatchEventKinds WatchService FileSystems]))
-
-(def vdj-url "http://localhost:80") ;; adjust port if needed
+(def vdj-url "http://localhost:80")
 
 (def vdj-history-path
   (str (System/getProperty "user.home") "\\AppData\\Local\\VirtualDJ\\History"))
@@ -15,10 +13,10 @@
 
 (defn parse-track-line [line]
   (when-let [[_ artists-str track]
-             (re-matches #".*?:.*?:\s*(.+?)\s*-\s*(.+)" line)]
-    {:artists (map str/trim (str/split artists-str #"&"))
-     :track track
-     :source :file}))
+             (re-matches #".*?:.*?:\s*(.+?)\s+-\s+(.+)" line)]
+    {:artists (mapv str/trim (str/split artists-str #"&"))
+     :track   (str/trim track)
+     :source  :file}))
 
 (defn current-track []
   (when (.exists (io/file tracklist-file))
@@ -73,22 +71,6 @@
     (or (current-track-from-api)
         (current-track))
     (current-track)))
-
-(defn track-key [track]
-  {:artists (mapv str/lower-case (:artists track))
-   :track   (some-> (:track track) str/lower-case str/trim)
-   :source  (:source track)
-   :deck    (:deck track)})
-
-(defn choose-track-source []
-  (if (vdj-api-running?)
-    :api
-    :file))
-
-(defn current-track-from-source [source]
-  (case source
-    :api  (current-track-from-api)
-    :file (current-track)))
 
 (defn deck-track [deck]
   (when (deck-audible? deck)
@@ -151,29 +133,3 @@
        (fn []
          (reset! running? false)
          (future-cancel worker))})))
-
-
-(defn watch-tracklist []
-  (let [source (choose-track-source)
-        last-track-key (atom nil)]
-
-    (println
-      (case source
-        :api  "Music tracking using VirtualDJ API."
-        :file "Music tracking using tracklist.txt."))
-
-    (future
-      (loop []
-        (when-let [track (current-track-from-source source)]
-          (let [current-key (track-key track)]
-            (when (not= current-key @last-track-key)
-              (reset! last-track-key current-key)
-              (println "\nNow playing:")
-              (println "Source:" (:source track))
-              (when (:deck track)
-                (println "Deck:" (:deck track)))
-              (println "Artists:" (str/join ", " (:artists track)))
-              (println "Track:" (:track track)))))
-
-        (Thread/sleep 1000)
-        (recur)))))

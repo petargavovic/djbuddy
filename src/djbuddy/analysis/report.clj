@@ -150,16 +150,6 @@
         (format "%ds"
                 seconds-left)))))
 
-(defn resolved-track?
-  [track]
-  (not= false (:resolved? track)))
-
-(defn resolution-stats
-  [tracks]
-  (let [resolved (count (filter resolved-track? tracks))]
-    {:resolved resolved
-     :unresolved (- (count tracks) resolved)}))
-
 (def section-names
   [:opening
    :early-middle

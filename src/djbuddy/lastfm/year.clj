@@ -1,6 +1,5 @@
 (ns djbuddy.lastfm.year
-  (:require [djbuddy.lastfm.client :as lastfm]
-            [clojure.string :as str]))
+  (:require [djbuddy.lastfm.client :as lastfm]))
 
 (defn year-tag? [value]
   (and (string? value)

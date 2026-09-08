@@ -1,23 +1,6 @@
 (ns djbuddy.lastfm.genre
-  (:require [clj-http.client :as http]
-            [cheshire.core :as json]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [djbuddy.lastfm.client :as client]))
-
-(def ignored-tags
-  #{"seen live"
-    "favorites"
-    "favourite"
-    "favorite"
-    "awesome"
-    "80s"
-    "70s"
-    "90s"
-    "00s"
-    "male vocalists"
-    "female vocalists"
-    "british"
-    "american"})
 
 (def allowed-genres
   #{

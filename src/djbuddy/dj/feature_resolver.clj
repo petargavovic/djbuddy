@@ -206,83 +206,18 @@
 
 
 ;; --------------------------------------------------
-;; ReccoBeats fallback
-;; --------------------------------------------------
-
-(defn resolve-reccobeats-by-id
-  [track {:keys [by-spotify-id
-                 by-isrc]}]
-
-  (cond
-
-    (and (:spotify-id track)
-         by-spotify-id)
-
-    (when-let [resolved
-               (by-spotify-id
-                 (:spotify-id track))]
-
-      (enrich-track
-        track
-        resolved
-        :reccobeats
-        :spotify-id))
-
-
-    (and (:isrc track)
-         by-isrc)
-
-    (when-let [resolved
-               (by-isrc
-                 (:isrc track))]
-
-      (enrich-track
-        track
-        resolved
-        :reccobeats
-        :isrc))
-
-
-    :else
-    nil))
-
-
-(defn resolve-reccobeats-by-catalog
-  [track {:keys [by-artist-title]}]
-
-  (when by-artist-title
-
-    (when-let [resolved
-               (by-artist-title
-                 (track-artist track)
-                 (track-title track))]
-
-      (enrich-track
-        track
-        resolved
-        :reccobeats
-        :artist-title))))
-
-
-;; --------------------------------------------------
 ;; HISTORY MODE
 ;; --------------------------------------------------
 
 
 (defn resolve-history-track
-  [track library-tracks reccobeats]
+  [track library-tracks]
 
   (let [resolved
         (or
-          (resolve-from-vdj track library-tracks)
-
-          (resolve-reccobeats-by-id
+          (resolve-from-vdj
             track
-            reccobeats)
-
-          (resolve-reccobeats-by-catalog
-            track
-            reccobeats)
+            library-tracks)
 
           (unresolved-track
             track
@@ -296,7 +231,7 @@
 
         resolved-tracks
         (mapv
-          #(resolve-history-track % library {})
+          #(resolve-history-track % library)
           (:tracks set-data))]
 
     (assoc set-data
@@ -323,9 +258,6 @@
 
      (loop []
 
-       ;; Reload database.xml because VirtualDJ may have
-       ;; written the newly analysed track since the
-       ;; previous attempt.
        (let [library-tracks
              (library/load-library)]
 
