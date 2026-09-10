@@ -88,42 +88,71 @@
 (defn audible-tracks []
   (keep deck-track [1 2]))
 
+(defn current-live-tracks []
+  (if (vdj-api-running?)
+
+    ;; Network Control available
+    {:source :api
+     :tracks (vec (audible-tracks))}
+
+    ;; Network Control unavailable -> tracklist.txt
+    {:source :file
+     :tracks (if-let [track (current-track)]
+               [track]
+               [])}))
+
 (defn start-live-watch! [on-track]
   (let [running?     (atom true)
-        last-by-deck (atom {})
-        track-order  (atom 0)]
+        last-by-slot (atom {})
+        track-order  (atom 0)
+        last-source  (atom nil)]
 
     (let [worker
           (future
             (while @running?
 
-              (doseq [track (audible-tracks)]
-                (let [deck (:deck track)
-                      key  [(:artists track)
-                            (:track track)]]
+              (let [{:keys [source tracks]}
+                    (current-live-tracks)]
 
-                  (when (not= key
-                              (get @last-by-deck deck))
+                (when (not= source @last-source)
+                  (reset! last-source source)
 
-                    (swap! last-by-deck assoc deck key)
+                  (println
+                    (case source
+                      :api
+                      "Music tracking using VirtualDJ API."
 
-                    ;; array-map to arrange order of parameters
-                    (let [numbered-track
-                          (array-map
-                            :order   (swap! track-order inc)
-                            :artists (:artists track)
-                            :track   (:track track)
-                            :deck    (:deck track)
-                            :played-at (:played-at track)
-                            :source  (:source track))]
+                      :file
+                      "VirtualDJ API unavailable. Using tracklist.txt.")))
 
-                      (try
-                        (on-track numbered-track)
+                (doseq [track tracks]
+                  (let [;; API tracks use their deck.
+                        ;; File tracks have no deck.
+                        slot (or (:deck track) :file)
 
-                        (catch Exception e
-                          (println
-                            "Track processing failed:"
-                            (.getMessage e))))))))
+                        key [(mapv str/lower-case
+                                   (:artists track))
+                             (some-> (:track track)
+                                     str/lower-case
+                                     str/trim)]]
+
+                    (when (not= key
+                                (get @last-by-slot slot))
+
+                      (swap! last-by-slot assoc slot key)
+
+                      (let [numbered-track
+                            (assoc track
+                              :order
+                              (swap! track-order inc))]
+
+                        (try
+                          (on-track numbered-track)
+
+                          (catch Exception e
+                            (println
+                              "Track processing failed:"
+                              (.getMessage e)))))))))
 
               (Thread/sleep 1000)))]
 
