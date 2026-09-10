@@ -7,7 +7,8 @@
            [java.time
             LocalDate
             LocalTime
-            LocalDateTime]))
+            LocalDateTime
+            ZoneId]))
 
 (def history-dir
   (io/file
@@ -67,8 +68,26 @@
        :duration-seconds song-length
        :source          :vdj-history})))
 
+(defn add-played-date-time [track]
+  (if-let [played-at (:played-at track)]
+
+    (let [local-date-time
+          (LocalDateTime/ofInstant
+            played-at
+            (ZoneId/systemDefault))]
+
+      (assoc track
+        :played-date
+        (.toLocalDate local-date-time)
+
+        :played-date-time
+        local-date-time))
+
+    track))
+
 (defn read-history [file date]
-  (let [played-date (LocalDate/parse date)]
+  (let [fallback-date (LocalDate/parse date)
+        zone          (ZoneId/systemDefault)]
 
     (with-open [reader (io/reader file)]
       (->> (line-seq reader)
@@ -77,12 +96,30 @@
 
            (map
              (fn [track]
-               (assoc track
-                 :played-date played-date
-                 :played-date-time
-                 (LocalDateTime/of
-                   played-date
-                   (:played-time track)))))
+
+               (if-let [played-at (:played-at track)]
+
+                 (let [played-date-time
+                       (LocalDateTime/ofInstant
+                         ^Instant played-at
+                         zone)]
+
+                   (assoc track
+                     :played-date
+                     (.toLocalDate played-date-time)
+
+                     :played-date-time
+                     played-date-time))
+
+                 ;; Fallback if :played-at is unavailable.
+                 (assoc track
+                   :played-date
+                   fallback-date
+
+                   :played-date-time
+                   (LocalDateTime/of
+                     fallback-date
+                     (:played-time track))))))
 
            doall
            vec))))
@@ -127,6 +164,12 @@
             start
             end))
        vec))
+
+(defn contains-next-day-tracks? [tracks start-date]
+  (let [next-date (.plusDays start-date 1)]
+    (boolean
+      (some #(= next-date (:played-date %))
+            tracks))))
 
 (defn add-track-order [tracks]
   (mapv
@@ -185,44 +228,82 @@
 
 (defn import-set
   [date start-time end-time]
+
   (let [{:keys [start end end-date]}
         (set-range date start-time end-time)
 
         start-date
         (LocalDate/parse date)
 
-        dates
-        (if (= start-date end-date)
-          [start-date]
-          [start-date end-date])
+        start-file
+        (history-file-for-date date)
 
-        ;; Read all tracks from all relevant history files.
+        start-tracks
+        (if start-file
+
+          (read-history
+            start-file
+            date)
+
+          (do
+            (println
+              "VirtualDJ history file not found for:"
+              date)
+            []))
+
+        crosses-midnight?
+        (not= start-date end-date)
+
+        ;; Check whether the starting day's file already
+        ;; contains tracks whose real played date is the
+        ;; following day.
+        start-file-has-next-day-tracks?
+        (and crosses-midnight?
+             (some
+               #(= end-date
+                   (:played-date %))
+               start-tracks))
+
+        ;; Only read the next day's file when:
+        ;; 1. the requested range crosses midnight
+        ;; 2. the first file does NOT already contain
+        ;;    next-day tracks
+        additional-tracks
+        (if (and crosses-midnight?
+                 (not start-file-has-next-day-tracks?))
+
+          (let [next-date-string
+                (str end-date)]
+
+            (if-let [next-file
+                     (history-file-for-date
+                       next-date-string)]
+
+              (read-history
+                next-file
+                next-date-string)
+
+              (do
+                (println
+                  "VirtualDJ history file not found for:"
+                  next-date-string)
+                [])))
+
+          [])
+
         all-tracks
-        (->> dates
-             (mapcat
-               (fn [current-date]
-                 (let [date-string
-                       (str current-date)]
+        (->> (concat
+               start-tracks
+               additional-tracks)
 
-                   (if-let [file
-                            (history-file-for-date
-                              date-string)]
-
-                     (read-history
-                       file
-                       date-string)
-
-                     (do
-                       (println
-                         "VirtualDJ history file not found for:"
-                         date-string)
-                       [])))))
              (sort-by :played-at)
              vec)
 
         filtered-tracks
         (-> all-tracks
-            (tracks-between-datetimes start end)
+            (tracks-between-datetimes
+              start
+              end)
             add-track-order)
 
         first-track
@@ -243,7 +324,8 @@
 
         last-track-natural-end
         (when last-track
-          (track-end-from-duration last-track))
+          (track-end-from-duration
+            last-track))
 
         next-track-start
         (when next-track
@@ -251,8 +333,10 @@
 
         ended-at
         (cond
+
           (and next-track-start
                last-track-natural-end)
+
           (if (.isBefore
                 ^Instant next-track-start
                 ^Instant last-track-natural-end)
